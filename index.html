@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Blackjack Pro Trainer · Stake v9.10 Strategy</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(circle at center, #065f46 0%, #022c22 100%);
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+    color: #fff;
+  }
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .neon-gold { border: 3px solid #fbbf24; box-shadow: 0 0 15px rgba(251, 191, 36, 0.4); }
+
+  /* === BUG FIX: !important so Tailwind's flex utility doesn't override === */
+  .hidden-section { display: none !important; }
+
+  /* dvh fallback */
+  .play-wrap { height: calc(100vh - 44px); height: calc(100dvh - 44px); }
+
+  .card {
+    width: 54px; height: 76px;
+    font-size: 1.4rem !important;
+    transition: all .25s ease;
+    animation: cardPop .35s ease-out;
+    border-radius: 0.6rem;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900;
+  }
+  @media (min-width: 768px) {
+    .card { width: 96px; height: 134px; font-size: 2.8rem !important; border-radius: 0.85rem; }
+  }
+  @media (max-height: 680px) and (max-width: 767px) {
+    .card { width: 48px; height: 68px; font-size: 1.2rem !important; }
+  }
+  @keyframes cardPop {
+    from { opacity: 0; transform: scale(.5) translateY(20px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .correct-flash { animation: flashGreen .5s; }
+  .incorrect-flash { animation: flashRed .5s; }
+  @keyframes flashGreen {
+    0%   { background: transparent; }
+    50%  { background: rgba(34, 197, 94, .3); }
+    100% { background: transparent; }
+  }
+  @keyframes flashRed {
+    0%   { background: transparent; }
+    50%  { background: rgba(225, 29, 72, .3); }
+    100% { background: transparent; }
+  }
+  .disabled-btn { opacity: .25; cursor: not-allowed; pointer-events: none; filter: grayscale(1); }
+
+  /* ===== BJA-STYLE CHART (matches Blackjack Apprenticeship poster) ===== */
+  .bja-section { background: #2b3138; border-radius: 6px; overflow: hidden; }
+  .bja-title { background: #6b7280; color: #fff; text-align: center; padding: 5px 0; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; }
+  .bja-subtitle { background: #4b5563; color: #d1d5db; text-align: center; padding: 3px 0; font-size: 9px; font-weight: 700; letter-spacing: 0.15em; }
+  .bja-table { width: 100%; border-collapse: separate; border-spacing: 1px; background: #1e293b; }
+  .bja-table th, .bja-table td { font-size: 10px; padding: 4px 0; text-align: center; font-weight: 800; }
+  .bja-table th { color: #cbd5e1; background: #475569; font-weight: 700; }
+  .bja-table .row-lbl { background: #475569; color: #fff; font-weight: 800; padding: 4px; }
+  @media (min-width: 768px) {
+    .bja-table th, .bja-table td { font-size: 11px; padding: 5px 0; }
+    .bja-title { font-size: 12px; }
+  }
+  .bja-Y   { background: #3FAA76; color: #fff; }
+  .bja-YN  { background: #5BB5A1; color: #fff; }
+  .bja-N   { background: #f1f5f9; color: #1e293b; }
+  .bja-S   { background: #F0AB44; color: #fff; }
+  .bja-H   { background: #f1f5f9; color: #1e293b; }
+  .bja-D   { background: #3FAA76; color: #fff; }
+  .bja-Ds  { background: #5BB5A1; color: #fff; }
+  .bja-SUR { background: #3FAA76; color: #fff; }
+  .bja-empty { background: #f1f5f9; color: #1e293b; }
+  .bja-key { background: #2b3138; padding: 6px 8px; }
+  .bja-key-row { display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 2px 0; color: #cbd5e1; }
+  .bja-key-cell { display: inline-block; width: 28px; padding: 2px 0; text-align: center; border-radius: 2px; font-weight: 800; font-size: 10px; }
+
+  .chart-tab.active { background: #fbbf24 !important; color: #000 !important; }
+
+  .stat-card { background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 10px; text-align: center; }
+  .history-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 1px; }
+
+  main { padding-bottom: var(--safe-bottom); }
+  .nav-h { height: 44px; }
+</style>
+</head>
+<body class="text-white">
+
+<nav class="glass-panel nav-h px-3 flex justify-between items-center border-b border-yellow-900/20">
+  <h1 class="text-base font-black text-yellow-500 uppercase tracking-wide">BJ <span class="text-white">PRO</span></h1>
+  <div class="flex gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+    <button id="tab-play"  onclick="showPage('play')"  class="px-3 py-1.5 rounded-full bg-slate-800/60 active:scale-95 transition">Train</button>
+    <button id="tab-stats" onclick="showPage('stats')" class="px-3 py-1.5 rounded-full bg-slate-800/60 active:scale-95 transition">Stats</button>
+    <button id="tab-chart" onclick="showPage('chart')" class="px-3 py-1.5 rounded-full bg-slate-800/60 active:scale-95 transition">Chart</button>
+  </div>
+</nav>
+
+<main class="px-2 pt-2 overflow-hidden play-wrap">
+
+<!-- ============================ PLAY ============================ -->
+<section id="page-play" class="flex flex-col items-center max-w-2xl mx-auto h-full">
+  <div id="table-surface" class="glass-panel w-full rounded-3xl p-3 md:p-5 border-t-4 border-yellow-600 shadow-2xl flex flex-col gap-2 md:gap-3 flex-1 min-h-0">
+    <div class="text-center">
+      <p class="text-[10px] font-black text-yellow-500/70 uppercase tracking-widest">Dealer (<span id="dealer-score">?</span>)</p>
+      <div id="dealer-cards" class="flex justify-center gap-2 mt-1 min-h-[76px] md:min-h-[134px]"></div>
+    </div>
+    <div class="text-center">
+      <p class="text-[10px] font-black text-yellow-500/70 uppercase tracking-widest">You (<span id="player-score">?</span>)</p>
+      <div id="player-cards-container" class="flex justify-center gap-2 mt-1 min-h-[76px] md:min-h-[134px] flex-wrap"></div>
+    </div>
+    <div id="feedback-box" class="bg-slate-900/70 rounded-xl py-2 px-3 text-center border border-white/10">
+      <div id="status-label" class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Decision</div>
+      <div id="feedback-text" class="text-base md:text-lg font-black italic text-slate-300">Ready</div>
+    </div>
+    <div class="grid grid-cols-4 gap-2">
+      <button id="btn-H" onclick="handleUserMove('H')" class="py-3 md:py-4 rounded-xl bg-blue-600 active:bg-blue-700 font-black text-sm md:text-base active:scale-95 transition shadow-lg shadow-blue-900/40">HIT</button>
+      <button id="btn-S" onclick="handleUserMove('S')" class="py-3 md:py-4 rounded-xl bg-rose-600 active:bg-rose-700 font-black text-sm md:text-base active:scale-95 transition shadow-lg shadow-rose-900/40">STAND</button>
+      <button id="btn-D" onclick="handleUserMove('D')" class="py-3 md:py-4 rounded-xl bg-amber-500 active:bg-amber-600 text-black font-black text-sm md:text-base active:scale-95 transition shadow-lg shadow-amber-900/40">DBL</button>
+      <button id="btn-Y" onclick="handleUserMove('Y')" class="py-3 md:py-4 rounded-xl bg-indigo-600 active:bg-indigo-700 font-black text-sm md:text-base active:scale-95 transition shadow-lg shadow-indigo-900/40">SPLIT</button>
+    </div>
+    <div class="flex justify-between items-center text-[10px] text-slate-400 mt-auto pt-1">
+      <div>Acc: <span id="quick-acc" class="text-yellow-400 font-black">—</span> · Streak: <span id="quick-streak" class="text-green-400 font-black">0</span> · Hands: <span id="quick-total" class="font-black">0</span></div>
+      <button onclick="startNewGame()" class="px-3 py-1 bg-slate-700/70 active:bg-slate-600 text-slate-200 rounded-full text-[10px] uppercase font-black active:scale-95 transition">New Deal</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ STATS ============================ -->
+<section id="page-stats" class="hidden-section max-w-2xl mx-auto h-full overflow-y-auto pb-6">
+  <div class="space-y-3 pt-1">
+    <div class="grid grid-cols-3 gap-2">
+      <div class="stat-card"><p class="text-slate-400 text-[10px] uppercase tracking-wider">Hands</p><p id="stat-total" class="text-2xl font-black mt-1">0</p></div>
+      <div class="stat-card"><p class="text-slate-400 text-[10px] uppercase tracking-wider">Correct</p><p id="stat-correct" class="text-2xl font-black text-green-400 mt-1">0</p></div>
+      <div class="stat-card"><p class="text-slate-400 text-[10px] uppercase tracking-wider">Accuracy</p><p id="stat-accuracy" class="text-2xl font-black text-yellow-400 mt-1">—</p></div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="stat-card"><p class="text-slate-400 text-[10px] uppercase tracking-wider">Current Streak</p><p id="stat-streak" class="text-xl font-black text-green-400 mt-1">0</p></div>
+      <div class="stat-card"><p class="text-slate-400 text-[10px] uppercase tracking-wider">Best Streak</p><p id="stat-best-streak" class="text-xl font-black text-yellow-400 mt-1">0</p></div>
+    </div>
+    <div class="glass-panel rounded-xl p-3">
+      <p class="text-[10px] font-black uppercase tracking-widest text-yellow-400/80 mb-2">Accuracy by Hand Type</p>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p class="text-[10px] text-slate-400 uppercase">Pairs</p>
+          <p id="stat-pairs"  class="text-lg font-black text-indigo-300">—</p>
+          <p id="stat-pairs-count" class="text-[10px] text-slate-500">0/0</p>
+        </div>
+        <div>
+          <p class="text-[10px] text-slate-400 uppercase">Soft</p>
+          <p id="stat-soft" class="text-lg font-black text-cyan-300">—</p>
+          <p id="stat-soft-count" class="text-[10px] text-slate-500">0/0</p>
+        </div>
+        <div>
+          <p class="text-[10px] text-slate-400 uppercase">Hard</p>
+          <p id="stat-hard" class="text-lg font-black text-rose-300">—</p>
+          <p id="stat-hard-count" class="text-[10px] text-slate-500">0/0</p>
+        </div>
+      </div>
+    </div>
+    <div class="glass-panel rounded-xl p-3">
+      <p class="text-[10px] font-black uppercase tracking-widest text-yellow-400/80 mb-2">Last 50 Hands</p>
+      <div id="stat-history" class="flex flex-wrap items-center justify-start min-h-[24px]">
+        <span class="text-slate-500 text-[11px] italic">No hands yet — go train!</span>
+      </div>
+    </div>
+    <div class="glass-panel rounded-xl p-3">
+      <p class="text-[10px] font-black uppercase tracking-widest text-yellow-400/80 mb-2">Top Mistakes</p>
+      <ol id="stat-mistakes" class="text-xs font-mono text-rose-300 space-y-1 max-h-[180px] overflow-y-auto">
+        <li class="text-slate-500 italic">No mistakes yet</li>
+      </ol>
+    </div>
+    <button onclick="resetStats()" class="w-full py-2 bg-slate-700 active:bg-slate-600 text-slate-200 font-black rounded-full text-xs uppercase tracking-widest active:scale-95 transition">Reset All Stats</button>
+  </div>
+</section>
+
+<!-- ============================ CHART ============================ -->
+<section id="page-chart" class="hidden-section max-w-3xl mx-auto h-full overflow-y-auto pb-6">
+  <div class="flex gap-1 mb-2 md:hidden">
+    <button class="chart-tab active flex-1 py-2 rounded-lg bg-slate-800/70 text-[10px] font-black uppercase tracking-widest" data-pane="pairs"     onclick="showChartPane('pairs',     this)">Pairs</button>
+    <button class="chart-tab        flex-1 py-2 rounded-lg bg-slate-800/70 text-[10px] font-black uppercase tracking-widest" data-pane="soft"      onclick="showChartPane('soft',      this)">Soft</button>
+    <button class="chart-tab        flex-1 py-2 rounded-lg bg-slate-800/70 text-[10px] font-black uppercase tracking-widest" data-pane="hard"      onclick="showChartPane('hard',      this)">Hard</button>
+    <button class="chart-tab        flex-1 py-2 rounded-lg bg-slate-800/70 text-[10px] font-black uppercase tracking-widest" data-pane="surrender" onclick="showChartPane('surrender', this)">Surr</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+    <div id="pane-pairs"     class="chart-pane"></div>
+    <div id="pane-soft"      class="chart-pane hidden md:block"></div>
+    <div id="pane-hard"      class="chart-pane hidden md:block"></div>
+    <div id="pane-surrender" class="chart-pane hidden md:block"></div>
+  </div>
+  <div class="bg-slate-700 text-white font-black text-center text-[11px] uppercase tracking-widest py-2 rounded mt-3">
+    Insurance or Even Money: Don't Take
+  </div>
+  <p class="text-slate-400 text-[10px] text-center mt-2 italic">Strategy from Blackjack Apprenticeship · DAS enabled · matches Stake v9.10 trainer logic</p>
+</section>
+
+</main>
+
+<script>
+/* ===== STAKE v9.10 STRATEGY (verbatim from content.js 285-401) ===== */
+function evaluateHand(cards) {
+  let total = 0, aces = 0;
+  for (let c of cards) {
+    if (c === 'A') { total += 11; aces += 1; }
+    else total += parseInt(c, 10);
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces -= 1; }
+  return { total, isSoft: aces > 0 };
+}
+function isPair(cards) { return cards.length === 2 && cards[0] === cards[1]; }
+function getRecommendedMove(playerCards, dealerCard, canSplit) {
+  const { total, isSoft } = evaluateHand(playerCards);
+  const pair = isPair(playerCards);
+  if (canSplit && pair) {
+    const p = playerCards[0];
+    if (p === 'A' || p === '8') return 'SP';
+    if (p === '10') return 'S';
+    if (p === '9') return ['7','10','A'].includes(dealerCard) ? 'S' : 'SP';
+    if (p === '7') return ['8','9','10','A'].includes(dealerCard) ? 'H' : 'SP';
+    if (p === '6') return ['7','8','9','10','A'].includes(dealerCard) ? 'H' : 'SP';
+    if (p === '4') return ['5','6'].includes(dealerCard) ? 'SP' : 'H';
+    if (p === '3' || p === '2') return ['8','9','10','A'].includes(dealerCard) ? 'H' : 'SP';
+  }
+  if (isSoft) {
+    if (total >= 20) return 'S';
+    if (total === 19) return dealerCard === '6' ? 'Ds' : 'S';
+    if (total === 18) {
+      if (['2','3','4','5','6'].includes(dealerCard)) return 'Ds';
+      if (['7','8'].includes(dealerCard)) return 'S';
+      return 'H';
+    }
+    if (total === 17) return ['3','4','5','6'].includes(dealerCard) ? 'D' : 'H';
+    if (total === 16 || total === 15) return ['4','5','6'].includes(dealerCard) ? 'D' : 'H';
+    if (total === 14 || total === 13) return ['5','6'].includes(dealerCard) ? 'D' : 'H';
+    return 'H';
+  }
+  if (total >= 17) return 'S';
+  if (total >= 13 && total <= 16) return ['2','3','4','5','6'].includes(dealerCard) ? 'S' : 'H';
+  if (total === 12) return ['4','5','6'].includes(dealerCard) ? 'S' : 'H';
+  if (total === 11) return 'D';
+  if (total === 10) return ['10','A'].includes(dealerCard) ? 'H' : 'D';
+  if (total === 9)  return ['3','4','5','6'].includes(dealerCard) ? 'D' : 'H';
+  return 'H';
+}
+function toStake(n) { return n === 11 ? 'A' : String(n); }
+
+/* ===== BJA CHART DATA (display only — faithful transcription) ===== */
+const DEALER_COLS = ['2','3','4','5','6','7','8','9','10','A'];
+const BJA = {
+  pairs: {
+    title: 'Pair Splitting',
+    rows: ['A,A','T,T','9,9','8,8','7,7','6,6','5,5','4,4','3,3','2,2'],
+    data: {
+      'A,A': ['Y','Y','Y','Y','Y','Y','Y','Y','Y','Y'],
+      'T,T': ['N','N','N','N','N','N','N','N','N','N'],
+      '9,9': ['Y','Y','Y','Y','Y','N','Y','Y','N','N'],
+      '8,8': ['Y','Y','Y','Y','Y','Y','Y','Y','Y','Y'],
+      '7,7': ['Y','Y','Y','Y','Y','Y','N','N','N','N'],
+      '6,6': ['YN','Y','Y','Y','Y','N','N','N','N','N'],
+      '5,5': ['N','N','N','N','N','N','N','N','N','N'],
+      '4,4': ['N','N','N','YN','YN','N','N','N','N','N'],
+      '3,3': ['YN','YN','Y','Y','Y','Y','N','N','N','N'],
+      '2,2': ['YN','YN','Y','Y','Y','Y','N','N','N','N']
+    },
+    key: [['Y','Split the Pair'], ['YN','Split if DAS, else don\'t'], ['N','Don\'t Split']]
+  },
+  soft: {
+    title: 'Soft Totals',
+    rows: ['A,9','A,8','A,7','A,6','A,5','A,4','A,3','A,2'],
+    data: {
+      'A,9': ['S','S','S','S','S','S','S','S','S','S'],
+      'A,8': ['S','S','S','S','Ds','S','S','S','S','S'],
+      'A,7': ['Ds','Ds','Ds','Ds','Ds','S','S','H','H','H'],
+      'A,6': ['H','D','D','D','D','H','H','H','H','H'],
+      'A,5': ['H','H','D','D','D','H','H','H','H','H'],
+      'A,4': ['H','H','D','D','D','H','H','H','H','H'],
+      'A,3': ['H','H','H','D','D','H','H','H','H','H'],
+      'A,2': ['H','H','H','D','D','H','H','H','H','H']
+    },
+    key: [['H','Hit'], ['S','Stand'], ['D','Double if allowed, else Hit'], ['Ds','Double if allowed, else Stand']]
+  },
+  hard: {
+    title: 'Hard Totals',
+    rows: ['17','16','15','14','13','12','11','10','9','8'],
+    data: {
+      '17': ['S','S','S','S','S','S','S','S','S','S'],
+      '16': ['S','S','S','S','S','H','H','H','H','H'],
+      '15': ['S','S','S','S','S','H','H','H','H','H'],
+      '14': ['S','S','S','S','S','H','H','H','H','H'],
+      '13': ['S','S','S','S','S','H','H','H','H','H'],
+      '12': ['H','H','S','S','S','H','H','H','H','H'],
+      '11': ['D','D','D','D','D','D','D','D','D','D'],
+      '10': ['D','D','D','D','D','D','D','D','H','H'],
+      '9':  ['H','D','D','D','D','H','H','H','H','H'],
+      '8':  ['H','H','H','H','H','H','H','H','H','H']
+    },
+    key: [['H','Hit'], ['S','Stand'], ['D','Double if allowed, else Hit']]
+  },
+  surrender: {
+    title: 'Late Surrender',
+    rows: ['16','15','14'],
+    data: {
+      '16': ['','','','','','','','SUR','SUR','SUR'],
+      '15': ['','','','','','','','','SUR',''],
+      '14': ['','','','','','','','','','']
+    },
+    key: [['SUR','Surrender (else use Hard Totals)']]
+  }
+};
+
+function renderBJASection(name) {
+  const sec = BJA[name];
+  let h = '<div class="bja-section">';
+  h += '<div class="bja-title">' + sec.title.toUpperCase() + '</div>';
+  h += '<div class="bja-subtitle">DEALER UPCARD</div>';
+  h += '<table class="bja-table">';
+  h += '<tr><th></th>' + DEALER_COLS.map(d => '<th>' + d + '</th>').join('') + '</tr>';
+  for (const r of sec.rows) {
+    h += '<tr><td class="row-lbl">' + r + '</td>';
+    h += sec.data[r].map(v => {
+      const cls = v === '' ? 'bja-empty' : 'bja-' + v.replace('/','');
+      const text = v === 'YN' ? 'Y/N' : v;
+      return '<td class="' + cls + '">' + text + '</td>';
+    }).join('');
+    h += '</tr>';
+  }
+  h += '</table>';
+  h += '<div class="bja-key">';
+  for (const [sym, label] of sec.key) {
+    const cls = 'bja-' + sym.replace('/','');
+    const text = sym === 'YN' ? 'Y/N' : sym;
+    h += '<div class="bja-key-row"><span class="bja-key-cell ' + cls + '">' + text + '</span><span>' + label + '</span></div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+function renderChart() {
+  document.getElementById('pane-pairs').innerHTML     = renderBJASection('pairs');
+  document.getElementById('pane-soft').innerHTML      = renderBJASection('soft');
+  document.getElementById('pane-hard').innerHTML      = renderBJASection('hard');
+  document.getElementById('pane-surrender').innerHTML = renderBJASection('surrender');
+}
+function showChartPane(name, btn) {
+  document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+  ['pairs','soft','hard','surrender'].forEach(p => {
+    const el = document.getElementById('pane-' + p);
+    if (isDesktop) {
+      el.classList.remove('hidden'); el.classList.add('block');
+    } else {
+      if (p === name) { el.classList.remove('hidden'); el.classList.add('block'); }
+      else { el.classList.add('hidden'); el.classList.remove('block'); }
+    }
+  });
+}
+
+/* ===== STATS ENGINE ===== */
+const STATS_KEY = 'bjStatsV2';
+const DEFAULT_STATS = {
+  total: 0, correct: 0,
+  mistakes: {},
+  byType: { pairs:{total:0,correct:0}, soft:{total:0,correct:0}, hard:{total:0,correct:0} },
+  currentStreak: 0, bestStreak: 0,
+  history: []
+};
+let statsData;
+
+function loadStatsFromStorage() {
+  let raw = localStorage.getItem(STATS_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      statsData = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_STATS)), parsed);
+      statsData.byType = Object.assign({}, DEFAULT_STATS.byType, parsed.byType || {});
+      statsData.history = parsed.history || [];
+      return;
+    } catch(e) {}
+  }
+  const v1 = localStorage.getItem('bjStats');
+  if (v1) {
+    try {
+      const old = JSON.parse(v1);
+      statsData = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_STATS)), {
+        total: old.total || 0, correct: old.correct || 0, mistakes: old.mistakes || {}
+      });
+      return;
+    } catch(e) {}
+  }
+  statsData = JSON.parse(JSON.stringify(DEFAULT_STATS));
+}
+function saveStatsToStorage() { localStorage.setItem(STATS_KEY, JSON.stringify(statsData)); }
+
+function recordHand(isCorrect, mistakeKey, handType) {
+  statsData.total++;
+  if (isCorrect) {
+    statsData.correct++;
+    statsData.currentStreak++;
+    if (statsData.currentStreak > statsData.bestStreak) statsData.bestStreak = statsData.currentStreak;
+  } else {
+    statsData.currentStreak = 0;
+    statsData.mistakes[mistakeKey] = (statsData.mistakes[mistakeKey] || 0) + 1;
+  }
+  if (handType && statsData.byType[handType]) {
+    statsData.byType[handType].total++;
+    if (isCorrect) statsData.byType[handType].correct++;
+  }
+  statsData.history.push(isCorrect ? 1 : 0);
+  if (statsData.history.length > 50) statsData.history.shift();
+  saveStatsToStorage();
+  updateQuickStats();
+}
+function resetStats() {
+  if (!confirm('Reset all stats? This cannot be undone.')) return;
+  statsData = JSON.parse(JSON.stringify(DEFAULT_STATS));
+  saveStatsToStorage();
+  refreshStats();
+  updateQuickStats();
+}
+function pct(c, t) { return t ? Math.round(c / t * 100) + '%' : '—'; }
+
+function refreshStats() {
+  document.getElementById('stat-total').innerText = statsData.total;
+  document.getElementById('stat-correct').innerText = statsData.correct;
+  document.getElementById('stat-accuracy').innerText = pct(statsData.correct, statsData.total);
+  document.getElementById('stat-streak').innerText = statsData.currentStreak;
+  document.getElementById('stat-best-streak').innerText = statsData.bestStreak;
+  for (const t of ['pairs','soft','hard']) {
+    const d = statsData.byType[t];
+    document.getElementById('stat-' + t).innerText = pct(d.correct, d.total);
+    document.getElementById('stat-' + t + '-count').innerText = d.correct + '/' + d.total;
+  }
+  const hist = document.getElementById('stat-history');
+  if (statsData.history.length === 0) {
+    hist.innerHTML = '<span class="text-slate-500 text-[11px] italic">No hands yet — go train!</span>';
+  } else {
+    hist.innerHTML = statsData.history.map(v =>
+      '<span class="history-dot" style="background:' + (v ? '#22c55e' : '#e11d48') + '"></span>'
+    ).join('');
+  }
+  const list = Object.entries(statsData.mistakes).sort((a,b) => b[1] - a[1]).slice(0, 12);
+  const ol = document.getElementById('stat-mistakes');
+  ol.innerHTML = list.length
+    ? list.map(([k,v]) => '<li>· ' + k + ' <span class="text-slate-500">×' + v + '</span></li>').join('')
+    : '<li class="text-slate-500 italic">No mistakes yet — perfect!</li>';
+}
+function updateQuickStats() {
+  const a = document.getElementById('quick-acc');
+  const t = document.getElementById('quick-total');
+  const s = document.getElementById('quick-streak');
+  if (a) a.innerText = pct(statsData.correct, statsData.total);
+  if (t) t.innerText = statsData.total;
+  if (s) s.innerText = statsData.currentStreak;
+}
+
+/* ===== PAGE SWITCHING ===== */
+function showPage(page) {
+  ['play','stats','chart'].forEach(p => {
+    document.getElementById('page-' + p).classList.add('hidden-section');
+    const tb = document.getElementById('tab-' + p);
+    tb.classList.remove('bg-yellow-500','text-black');
+    tb.classList.add('bg-slate-800/60','text-slate-300');
+  });
+  document.getElementById('page-' + page).classList.remove('hidden-section');
+  const tab = document.getElementById('tab-' + page);
+  tab.classList.add('bg-yellow-500','text-black');
+  tab.classList.remove('bg-slate-800/60','text-slate-300');
+  if (page === 'stats') refreshStats();
+  if (page === 'chart') {
+    renderChart();
+    if (!window.matchMedia('(min-width: 768px)').matches) {
+      const firstTab = document.querySelector('.chart-tab[data-pane="pairs"]');
+      showChartPane('pairs', firstTab);
+    }
+  }
+}
+
+/* ===== GAME ===== */
+const sounds = {
+  correct: new Audio('https://cdn.pixabay.com/audio/2022/03/10/audio_c972ce2c2f.mp3'),
+  wrong:   new Audio('https://cdn.pixabay.com/audio/2022/03/10/audio_f876389775.mp3')
+};
+let game = {
+  shoe: [], hands: [], activeIdx: 0,
+  dHand: [], active: false, turn: 'P',
+  correctMove: null, canDouble: true, canSplit: false, timer: null,
+  currentHandType: 'hard'
+};
+function createShoe() {
+  let s = [];
+  const cards = [2,3,4,5,6,7,8,9,10,10,10,10,11];
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) s.push(...cards);
+  for (let i = s.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [s[i], s[j]] = [s[j], s[i]];
+  }
+  return s;
+}
+function getCard() {
+  if (game.shoe.length < 20) game.shoe = createShoe();
+  return game.shoe.pop();
+}
+function startNewGame() {
+  clearTimeout(game.timer);
+  game.hands     = [[getCard(), getCard()]];
+  game.dHand     = [getCard(), getCard()];
+  game.activeIdx = 0;
+  game.active    = true;
+  game.turn      = 'P';
+  updateStrategy(); updateUI();
+  setFeedback("NEW DEAL", "Make your move", "text-slate-300");
+}
+function classifyHandType(hand) {
+  if (hand.length === 2 && hand[0] === hand[1]) return 'pairs';
+  if (hand.includes(11)) {
+    const raw = hand.reduce((a,b)=>a+b,0);
+    if (raw <= 21) return 'soft';
+  }
+  return 'hard';
+}
+function updateStrategy() {
+  const hand   = game.hands[game.activeIdx];
+  const dUp    = game.dHand[0];
+  const stakeHand   = hand.map(toStake);
+  const stakeDealer = toStake(dUp);
+  game.canDouble = (hand.length === 2);
+  game.canSplit  = (game.hands.length === 1 && hand.length === 2 && hand[0] === hand[1]);
+  game.currentHandType = classifyHandType(hand);
+  document.getElementById('btn-D').classList.toggle('disabled-btn', !game.canDouble);
+  document.getElementById('btn-Y').classList.toggle('disabled-btn', !game.canSplit);
+  game.correctMove = getRecommendedMove(stakeHand, stakeDealer, game.canSplit);
+}
+function expectedButton() {
+  const m = game.correctMove;
+  if (m === 'SP') return 'Y';
+  if (m === 'D')  return game.canDouble ? 'D' : 'H';
+  if (m === 'Ds') return game.canDouble ? 'D' : 'S';
+  return m;
+}
+function handleUserMove(userMove) {
+  if (!game.active) return;
+  const expected = expectedButton();
+  const valid = (userMove === expected);
+  const hand = game.hands[game.activeIdx];
+  const score = getScore(hand);
+  const isPairHand = (hand.length === 2 && hand[0] === hand[1]);
+  const handLabel = isPairHand
+    ? (hand[0] === 11 ? 'A,A' : hand[0] + ',' + hand[0])
+    : (hand.length === 2 && hand.includes(11) ? 'A+' + (score-11) : '' + score);
+  const dLabel = game.dHand[0] === 11 ? 'A' : game.dHand[0];
+  const moveNames = { H:'Hit', S:'Stand', D:'Double', Y:'Split' };
+  const correctLabel = expected === 'Y' ? 'Split' : moveNames[expected];
+  const mistakeKey = handLabel + ' vs ' + dLabel + ' → ' + correctLabel;
+  recordHand(valid, mistakeKey, game.currentHandType);
+  if (valid) {
+    try { sounds.correct.currentTime = 0; sounds.correct.play(); } catch(e) {}
+    flashTable('correct-flash');
+    setFeedback("CORRECT", "Optimal move!", "text-green-400");
+    processAction(userMove);
+  } else {
+    try { sounds.wrong.currentTime = 0; sounds.wrong.play(); } catch(e) {}
+    flashTable('incorrect-flash');
+    setFeedback("WRONG", "Correct: " + correctLabel, "text-rose-400");
+  }
+}
+function processAction(move) {
+  const h = game.hands[game.activeIdx];
+  if (move === 'Y') {
+    const c = h[0];
+    game.hands[game.activeIdx] = [c, getCard()];
+    game.hands.push([c, getCard()]);
+    updateStrategy(); updateUI();
+  } else if (move === 'D') {
+    h.push(getCard()); moveToNext();
+  } else if (move === 'H') {
+    h.push(getCard());
+    if (getScore(h) > 21) moveToNext();
+    else { updateStrategy(); updateUI(); }
+  } else { moveToNext(); }
+}
+function moveToNext() {
+  if (game.activeIdx < game.hands.length - 1) {
+    game.activeIdx++; updateStrategy(); updateUI();
+  } else { dealerPlay(); }
+}
+function dealerPlay() {
+  game.turn = 'D';
+  while (getScore(game.dHand) < 17) game.dHand.push(getCard());
+  game.active = false;
+  updateUI();
+  game.timer = setTimeout(startNewGame, 1400);
+}
+function getScore(h) {
+  let t = h.reduce((a,b) => a+b, 0);
+  let aces = h.filter(x => x === 11).length;
+  while (t > 21 && aces > 0) { t -= 10; aces--; }
+  return t;
+}
+function flashTable(c) {
+  const t = document.getElementById('table-surface');
+  t.classList.remove('correct-flash','incorrect-flash');
+  void t.offsetWidth;
+  t.classList.add(c);
+}
+function setFeedback(label, msg, cls) {
+  document.getElementById('status-label').innerText = label;
+  const fb = document.getElementById('feedback-text');
+  fb.innerText = msg;
+  fb.className = 'text-base md:text-lg font-black italic ' + cls;
+}
+function updateUI() {
+  const cardHTML = (v, hidden, active) =>
+    '<div class="card ' + (hidden ? 'bg-slate-700' : 'bg-white text-black') + ' ' + (active ? 'neon-gold' : 'opacity-50') + '">' + (hidden ? '?' : (v === 11 ? 'A' : v)) + '</div>';
+  document.getElementById('dealer-cards').innerHTML =
+    game.dHand.map((c, i) => cardHTML(c, i === 1 && game.turn === 'P' && game.active, true)).join('');
+  document.getElementById('player-cards-container').innerHTML =
+    game.hands.map((h, i) => {
+      const active = (i === game.activeIdx && game.turn === 'P');
+      return '<div class="flex flex-col items-center gap-1 ' + (active ? 'p-1 rounded-xl bg-white/5 border border-yellow-500/70' : 'opacity-70') + '"><div class="flex gap-1">' + h.map(c => cardHTML(c, false, active)).join('') + '</div><div class="text-[10px] text-yellow-300/80 font-black">' + getScore(h) + '</div></div>';
+    }).join('');
+  document.getElementById('dealer-score').innerText =
+    (game.turn === 'P' && game.active) ? (game.dHand[0] === 11 ? 'A' : game.dHand[0]) : getScore(game.dHand);
+  document.getElementById('player-score').innerText = getScore(game.hands[game.activeIdx]);
+}
+
+/* ===== BOOT ===== */
+window.addEventListener('load', () => {
+  loadStatsFromStorage();
+  showPage('play');
+  startNewGame();
+  updateQuickStats();
+});
+window.addEventListener('resize', () => {
+  if (!document.getElementById('page-chart').classList.contains('hidden-section')) {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      ['pairs','soft','hard','surrender'].forEach(p => {
+        const el = document.getElementById('pane-' + p);
+        el.classList.remove('hidden'); el.classList.add('block');
+      });
+    } else {
+      const active = document.querySelector('.chart-tab.active');
+      const name = active ? active.getAttribute('data-pane') : 'pairs';
+      showChartPane(name, active);
+    }
+  }
+});
+</script>
+</body>
+</html>
