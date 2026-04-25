@@ -514,10 +514,44 @@ function getCard() {
   if (game.shoe.length < 20) game.shoe = createShoe();
   return game.shoe.pop();
 }
+/* ===== BALANCED SCENARIO SAMPLER =====
+   Real 6-deck dealing makes pairs ~6% of hands, so each pair-vs-dealer combo
+   only shows up ~0.5% of the time. To verify every chart cell in a reasonable
+   number of hands, we sample the INITIAL player hand uniformly across:
+     - 33% pair (10 pair types, even)
+     - 33% soft (A,2 through A,9, even)
+     - 33% hard (totals 8-17, even)
+   Dealer upcard is also uniform over 2-A. Hits/splits/dealer draw still
+   come from the real shoe via getCard(). */
+function pickStartingHand() {
+  const r = Math.random();
+  if (r < 0.34) {
+    const pair = [11,10,9,8,7,6,5,4,3,2][Math.floor(Math.random() * 10)];
+    return [pair, pair];
+  }
+  if (r < 0.67) {
+    return [11, 2 + Math.floor(Math.random() * 8)];   // A + 2..9
+  }
+  const total = 8 + Math.floor(Math.random() * 10);   // 8..17
+  const minCard = Math.max(2, total - 10);
+  const maxCard = Math.min(10, total - 2);
+  for (let i = 0; i < 50; i++) {
+    const c1 = minCard + Math.floor(Math.random() * (maxCard - minCard + 1));
+    const c2 = total - c1;
+    if (c2 >= 2 && c2 <= 10 && c1 !== c2) {
+      return Math.random() < 0.5 ? [c1, c2] : [c2, c1];
+    }
+  }
+  return [Math.floor(total/2), total - Math.floor(total/2)];
+}
+function pickDealerUpcard() {
+  return [2,3,4,5,6,7,8,9,10,11][Math.floor(Math.random() * 10)];
+}
+
 function startNewGame() {
   clearTimeout(game.timer);
-  game.hands     = [[getCard(), getCard()]];
-  game.dHand     = [getCard(), getCard()];
+  game.hands     = [pickStartingHand()];
+  game.dHand     = [pickDealerUpcard(), getCard()];   // hole card from shoe
   game.activeIdx = 0;
   game.active    = true;
   game.turn      = 'P';
